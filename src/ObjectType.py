@@ -4,10 +4,9 @@ import os
 import hashlib
 import zlib
 import collections
-import argparse
 import difflib
 import operator
-import  stat
+import stat
 import struct
 import time
 import urllib.request
@@ -169,7 +168,7 @@ def cat_file(mode, sha1_prefix):
             assert False, "Unhandled Object Type {!r}".format(object_type)
 
     else:
-        raise ValueError(f"Unexpected mode {mode!r}")#.format(mode))
+        raise ValueError(f"Unexpected mode {mode!r}")  # .format(mode))
 
 
 def read_index() -> list:
@@ -192,16 +191,16 @@ def read_index() -> list:
     assert version == 2, f"Unknown Index Version {version}"
 
     entry_data = data[12:-20]
-    entries = [] # An empty arrays of entries
+    entries = []  # An empty arrays of entries
     i = 0
     while i + 62 < len(entry_data):
         fields_end = i + 62
-        fields = struct.unpack("LLLLLLLLLL20sH", entry_data[i :fields_end])
+        fields = struct.unpack("LLLLLLLLLL20sH", entry_data[i: fields_end])
         path_end = entry_data.index(b"\x00", fields_end)
         path = entry_data[fields_end:path_end]
         entry = IndexEntry(*(fields + (path.decode(),)))
         entries.append(entry)
-        entry_length = ((62 +len(path) + 8) // 8) * 8
+        entry_length = ((62 + len(path) + 8) // 8) * 8
         i += entry_length
 
     assert len(entries) == num_entries
@@ -269,12 +268,12 @@ def status() -> None:
     if new:
         print("New File: ")
         for path in new:
-            print("     ",path)
+            print("     ", path)
 
     if deleted:
         print("Deleted Files: ")
         for path in deleted:
-            print("     ",path)
+            print("     ", path)
 
 
 def diff() -> None:
@@ -287,7 +286,7 @@ def diff() -> None:
     changed, _, _ = get_status()  # Ignoring the new and deleted values
 
     # accumulates the paths into a list
-    entries_by_path = { e.path: e for e in read_index() }
+    entries_by_path = {e.path: e for e in read_index()}
     for i, path in enumerate(changed):
         sha1 = entries_by_path[path].sha1.hex()
         object_type, data = read_object(sha1)
@@ -330,18 +329,18 @@ def write_index(entries) -> None:
         packed_entries.append(packed_entry)
         
         header = struct.pack("!4sLL", b"DIRC", 2, len(entries))
-        all_data =  header + b''.join(packed_entries)
+        all_data = header + b''.join(packed_entries)
         digest = hashlib.sha1(all_data).digest()
         write_file(os.path.join(".pygit", "index"), all_data + digest)
 
 
-def add(paths):
+def add(paths) -> None:
     """
     Add the files to the index files
     :param paths:
     :return void:
     """
-    path = [p.replace('\\', '/') for p in paths]
+    paths = [p.replace('\\', '/') for p in paths]
     all_entries = read_index()
     entries = [e for e in all_entries if e.path not in paths]
 
@@ -349,13 +348,12 @@ def add(paths):
         sha1 = hash_objects(read_file(path), "blob")
         st = os.stat(path)
         flags = len(path.encode())
-        assert flags < (1 << 12) # Less than 0b1000000000000 amount?
+        assert flags < (1 << 12)  # Less than 0b1000000000000 amount?
 
         entry = IndexEntry(
                 int(st.st_ctime), 0, int(st.st_mtime), 0, st.st_dev,
                 st.st_ino, st.st_mode, st.st_uid, st.st_gid, st.st_size,
-                bytes.fromhex(sha1), flags, path
-        )
+                bytes.fromhex(sha1), flags, path)
         entries.append(entry)
 
     entries.sort(key=operator.attrgetter("path"))
@@ -370,7 +368,7 @@ def write_tree() -> str:
     tree_entries = []
     for entry in read_index():
         assert '/' not in entry.path, "Currently only supports a single top level directory"
-        #mode_path = "{:o} {}".format(entry.mode, entry.path).encode()
+        # mode_path = "{:o} {}".format(entry.mode, entry.path).encode()
         mode_path = f"{entry.mode.encode():o} {entry.path.encode()}"
         tree_entry = mode_path + b"\x00" + entry.sha1
         # Showing warning around the byte Null unexpected type. May cause problems ?
@@ -380,7 +378,7 @@ def write_tree() -> str:
     return hash_objects(b''.join(tree_entries), "tree")
 
 
-def get_local_main_hash():
+def get_local_main_hash() -> str or None:
     """
     Gets the current commit hash (SHA1 String) of local main branch
     :return read_file(...) -> bytes:
@@ -392,7 +390,7 @@ def get_local_main_hash():
         return None
 
 
-def commit(message, author=None):
+def commit(message, author=None) -> str:
     """
     commit the current state of the index to main with the given commit message
     :param message:
@@ -411,11 +409,11 @@ def commit(message, author=None):
         abs(utc_offset) // 3600, (abs(utc_offset) // 60) % 60
     )           # If I am not wrong, this should format the author_time string properly
 
-    lines = [ "tree" + tree ]
+    lines = ["tree" + tree]
     if parent:
         lines.append("parent " + parent)
     lines.append(f"author {author} {author_time}")
-    lines.append(f"commiter {author} {author_time}")
+    lines.append(f"committed by {author} {author_time}")
     lines.append("")
     lines.append(message)
     lines.append("")
@@ -447,13 +445,13 @@ def extract_lines(data) -> list:
         else:
             i += line_length
 
-        if len(data) < i :
+        if len(data) < i:
             break
 
     return lines
 
 
-def build_lines_data(lines):
+def build_lines_data(lines) -> bytes:
     """
     Builds the byte string from given lines to send to the server
     :param lines:
@@ -468,7 +466,25 @@ def build_lines_data(lines):
     return b''.join(result)
 
 
-def get_remote_main_hash(git_url, username, password):
+def http_request(url, username, password, data=None):
+    """
+    Make an authenticated HTTP request to given URL (GET by default, POST
+    if "data" is not None).
+    :param url:
+    :param username:
+    :param password:
+    :param data:
+    :return:
+    """
+    password_manager = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+    password_manager.add_password(None, url, username, password)
+    auth_handler = urllib.request.HTTPBasicAuthHandler(password_manager)
+    opener = urllib.request.build_opener(auth_handler)
+    f = opener.open(url, data=data)
+    return f.read()
+
+
+def get_remote_main_hash(git_url, username, password) -> str or None:
     """
     Get the commit hash of remote main branch
     :param git_url:
@@ -477,7 +493,7 @@ def get_remote_main_hash(git_url, username, password):
     :return sha1 hex string or none if no remote commits:
     """
     url = git_url + "/info/refs?service=git-receive-pack"
-    response = https_request(url, username, password)      # function https_request needs to be defined
+    response = http_request(url, username, password)      # function https_request needs to be defined
     lines = extract_lines(response)
 
     # assertions
@@ -522,7 +538,7 @@ def read_tree(sha1=None, data=None) -> list:
     return entries
 
 
-def find_tree_objects(tree_sha1):
+def find_tree_objects(tree_sha1) -> set:
     """
     Return set of SHA-1 hashes of all objects in this tree (recursively),
     including the hash of the tree itself.
@@ -530,7 +546,7 @@ def find_tree_objects(tree_sha1):
     :return set:
     """
     objects = {tree_sha1}
-    for mode, path, sha1 in read_tree(sha1=tree_sha1)
+    for mode, path, sha1 in read_tree(sha1=tree_sha1):
         if stat.S_ISDIR(mode):
             objects.update(find_tree_objects(sha1))
 
@@ -540,7 +556,7 @@ def find_tree_objects(tree_sha1):
     return objects
 
 
-def find_commit_objects(commit_sha1):
+def find_commit_objects(commit_sha1) -> set:
     """
     Return set of SHA-1 hashes of all objects in this commit (recursively),
     its tree, its parents, and the hash of the commit itself.
@@ -560,4 +576,95 @@ def find_commit_objects(commit_sha1):
         objects.update(find_commit_objects(parent))
 
     return objects
+
+
+def find_missing_objects(local_sha1, remote_sha1) -> set:
+    """
+    Return set of SHA-1 hashes of objects in local commit that are missing
+    at the remote (based on the given remote commit hash).
+    :param local_sha1:
+    :param remote_sha1:
+    :return set:
+    """
+    local_objects = find_commit_objects(local_sha1)
+    if remote_sha1 is None:
+        return local_objects
+
+    remote_objects = find_commit_objects(remote_sha1)
+    return local_objects - remote_objects
+
+
+def encode_pack_object(obj) -> bytes:
+    """
+    Encode a single object for a pack file and
+    return bytes (variable-length header followed by compressed data bytes)
+    :param obj:
+    :return bytes:
+    """
+    object_type, data = read_object(obj)
+    type_num = ObjectType[object_type].value
+    size = len(data)
+    byte = (type_num << 4) | (size & 0x0f)
+    size >>= 4
+    header = []
+
+    while size:
+        header.append(byte | 0x08)
+        byte = size & 0x7f
+        size >>= 7
+
+    header.append(byte)
+    return bytes(header) + zlib.compress(data)
+
+
+def create_pack(objects) -> bytes:
+    """
+    Create pack file containing all objects in given set of SHA-1
+    hashes, return data bytes of full pack file.
+    :param objects:
+    :return bytes:
+    """
+    header = struct.pack("!4sLL", b"PACK", 2, len(objects))
+    body = b''.join(encode_pack_object(o) for o in sorted(objects))
+    contents = header + body
+    sha1 = hashlib.sha1(contents).digest()
+    data = contents + sha1
+    return data
+
+
+def push(git_url, username=None, password=None):
+    """
+    Push main branch to given git repo URL.
+    :param git_url:
+    :param username:
+    :param password:
+    :return:
+    """
+    if username is None:
+        username = os.environ["GIT_USERNAME"]
+
+    if password is None:
+        password = os.environ["GIT_PASSWORD"]
+
+    remote_sha1 = get_remote_main_hash(git_url, username, password)
+    local_sha1 = get_local_main_hash()
+    missing = find_missing_objects(local_sha1, remote_sha1)
+
+    print("Updating remote main from {} to {} ({} object{})".format(remote_sha1 or "no commits", local_sha1,
+                                                                    len(missing), '' if len(missing) == 1 else 's'))
+
+    lines = [f"{(remote_sha1 or ('0' * 40)).encode()} {local_sha1.encode()} refs/heads/master\x00 report-status"]
+    data = build_lines_data(lines) + create_pack(missing)
+    url = git_url + '/git-receive-pack'
+    response = http_request(url, username, password, data=data)
+    lines = extract_lines(response)
+    assert len(lines) >= 2,  'expected at least 2 lines, got {}'.format(len(lines))
+    assert lines[0] == b'unpack ok\n', "expected line 1 b'unpack ok', got: {}".format(lines[0])
+    assert lines[1] == b'ok refs/heads/master\n', "expected line 2 b'ok refs/heads/master\n', got: {}".format(lines[1])
+    return remote_sha1, missing
+
+
+
+
+
 
