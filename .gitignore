@@ -1,0 +1,8 @@
+# IDE and Text Editor
+/venv
+/.git
+/.idea
+
+
+
+test.py
