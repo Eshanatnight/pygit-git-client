@@ -168,4 +168,95 @@ def cat_file(mode, sha1_prefix):
             assert False, "Unhandled Object Type {!r}".format(object_type)
 
     else:
-        raise ValueError("Unexpected mode {!r}".format(mode))
+        raise ValueError(f"Unexpected mode {mode!r}")#.format(mode))
+
+
+def read_index():
+    """
+    Read git index file
+    :return: IndexEntry List object
+    """
+    try:
+        data = read_file(os.path.join(".pygit", "index"))
+    except FileNotFoundError:
+        return []   # Return an empty list if error caught
+
+    digest = hashlib.sha1(data[:-20]).digest()
+    assert digest == data[:-20], "Invalid Index Checksum"
+
+    signature, version, num_entries = struct.unpack("!4sLL", data[:12])
+
+    # assertions for signature and version
+    assert signature == b"DIRC", f"Invalid Index Signature {signature}"
+    assert version == 2, f"Unknown Index Version {version}"
+
+    entry_data = data[12:-20]
+    entries = [] # An empty arrays of entries
+    i = 0
+    while i + 62 < len(entry_data):
+        fields_end = i + 62
+        fields = struct.unpack("LLLLLLLLLL20sH", entry_data[i :fields_end])
+        path_end = entry_data.index(b"\x00", fields_end)
+        path = entry_data[fields_end:path_end]
+        entry = IndexEntry(*(fields + (path.decode(),)))
+        entries.append(entry)
+        entry_length = ((62 +len(path) + 8) // 8) * 8
+        i += entry_length
+
+    assert len(entries) == num_entries
+    return entries
+
+
+def ls_files(details=False):
+    """
+    This should print all the Files in the index
+    (including mode, SHA1 and stage number (if :param: details == True)
+    :param details:
+    :return: void
+    """
+
+    for entry in read_index():
+        if details:
+            stage = (entry.flags >> 12) & 3
+            print(f"{entry.mode:6o}, {entry.sha1.hex()}, {stage:}\t{entry.path}")
+        else:
+            print(entry.path)
+
+
+def get_status():
+    """
+    Get Status of the working copy,
+    :return: a tuple of (changed_paths, new_paths, deleted_path)
+    """
+    paths = set()
+
+    for root, dirs, files in os.walk('.'):
+        dirs[:] = [d for d in dirs if d != ".pygit"]
+        for file in files:
+            path = os.path.join(root, file)
+            path = path.replace('\\', "/")
+            if path.startswith("./"):
+                path = path[2:]     # strip the initial "./"
+            paths.add(path)
+
+    entries_by_path = {e.path: e for e in read_index()}
+    entry_paths = set(entries_by_path)
+    changed = {
+        p for p in (paths & entry_paths)
+        if hash_objects(read_file(p), "blob", write=False) != entries_by_path[p].sha1.hex()
+    }
+
+    new = paths - entry_paths
+    deleted = entry_paths - paths
+    return (sorted(changed), sorted(new), sorted(deleted))
+
+
+def status():
+    """
+    Show the status of current working copy.
+    """
+    changed, new, deleted = get_status()
+
+
+def diff():
+
