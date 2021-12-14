@@ -3,6 +3,4 @@
 /.git
 /.idea
 
-
-
-test.test
+/src/__pycache__
