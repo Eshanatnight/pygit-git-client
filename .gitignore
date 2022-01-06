@@ -1,6 +1,7 @@
 # IDE and Text Editor
 /venv
-/.git
 /.idea
 
 /src/__pycache__
+
+New.txt
