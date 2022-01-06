@@ -57,7 +57,7 @@ def main():
 
     sub_parser = sub_parsers.add_parser('push', help='push master branch to given git server URL')
 
-    sub_parser.add_argument('git_url', help='URL of git repo, eg: https://github.com/Eshanatnite/pygit.git')
+    sub_parser.add_argument('git_url', help='URL of git repo, eg: https://github.com/Eshanatnite/pygit-git-client.git')
 
     sub_parser.add_argument('-p', '--password', help='password to use for authentication (uses GIT_PASSWORD '
                             'environment variable by default)')
